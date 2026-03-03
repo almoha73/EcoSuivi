@@ -32,6 +32,8 @@
                         <span class="kpi-value cost-value" id="cost-1">--</span>
                         <span class="kpi-unit">€</span>
                     </div>
+                    <div id="msg-1" style="color: #fca5a5; font-size: 0.85rem; margin-top: 0.5rem; text-align: center;">
+                    </div>
                 </div>
 
                 <div class="glass-card property-card" id="card-2">
@@ -44,6 +46,8 @@
                     <div class="kpi cost-kpi">
                         <span class="kpi-value cost-value" id="cost-2">--</span>
                         <span class="kpi-unit">€</span>
+                    </div>
+                    <div id="msg-2" style="color: #fca5a5; font-size: 0.85rem; margin-top: 0.5rem; text-align: center;">
                     </div>
                 </div>
             </div>
@@ -79,8 +83,10 @@
                             style="font-size: 0.9rem; color: #6ee7b7; margin-top: 0.5rem; white-space: pre-wrap;"></div>
                     </div>
                 </div>
-                <div style="position: relative; height: 300px; width: 100%;">
-                    <canvas id="consoChart1"></canvas>
+                <div style="overflow-x: auto; overflow-y: hidden; width: 100%; border-radius: 8px;">
+                    <div id="chart-wrapper-1" style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="consoChart1"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -88,8 +94,10 @@
                 <div class="chart-header">
                     <h2 id="chart-title-2">La bicoque - Consommation</h2>
                 </div>
-                <div style="position: relative; height: 300px; width: 100%;">
-                    <canvas id="consoChart2"></canvas>
+                <div style="overflow-x: auto; overflow-y: hidden; width: 100%; border-radius: 8px;">
+                    <div id="chart-wrapper-2" style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="consoChart2"></canvas>
+                    </div>
                 </div>
             </div>
 

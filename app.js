@@ -177,27 +177,55 @@ const initDashboard = async (range, offset) => {
         const kpiElem = document.getElementById(logement.kpiElem);
         const costElem = document.getElementById(logement.costElem);
 
-        if (result.error || !result.data || !result.data.interval_reading) {
-            kpiElem.innerText = "Err";
-            costElem.innerText = "Err";
+        const msgElem = document.getElementById(`msg-${index + 1}`);
+
+        if (result.error || !result.data || !result.data.interval_reading || result.data.interval_reading.length === 0) {
+            kpiElem.innerText = "-";
+            costElem.innerText = "-";
+            if (msgElem) msgElem.innerText = "Données indisponibles (logement non acquis à cette période ?)";
+
             if (result.error && !result.error.includes("400")) allErrors.push(`${logement.label}: ${result.error}`);
             if (result.data && result.data.error) allErrors.push(`${logement.label}: ${result.data.error.error_description || result.data.error}`);
             return;
         }
 
+        if (msgElem) msgElem.innerText = "";
+
         document.getElementById(`chart-card-${index + 1}`).style.display = 'block';
         let readings = result.data.interval_reading;
 
-        // Calculs par intervalle
+        // Calculs exacts par point:
+        const dailyAboCost = logement.subscriptionMonth / 30; // Coût exact pour 1 journée (24h)
+        let aboCostPerPoint = dailyAboCost; // Par défaut (pour 'daily_consumption' où 1 point = 1 jour)
+
+        let intervalFractionH = 1; // fraction d'heure par défaut
+
+        if (config.api === 'consumption_load_curve' && readings.length > 0) {
+            // Lecture de la durée réelle d'un point dans l'API Enedis (15m ou 30m)
+            const interval = readings[0].interval_length; // ex: "PT15M"
+            let pointsPerDay = 48; // par défaut 30m
+            if (interval === "PT15M") { pointsPerDay = 96; intervalFractionH = 0.25; }
+            else if (interval === "PT30M") { pointsPerDay = 48; intervalFractionH = 0.5; }
+            else if (interval === "PT60M") { pointsPerDay = 24; intervalFractionH = 1; }
+
+            aboCostPerPoint = dailyAboCost / pointsPerDay; // On divise la journée en X points
+        }
+
         const processedPoints = readings.map(r => {
             const dateStr = r.date;
-            const kwh = (parseInt(r.value, 10) || 0) / 1000;
+            const rawValue = parseInt(r.value, 10) || 0;
+            let kwh = 0;
 
-            // Abonnement journalier divise par n points
-            let partsInDay = 1;
-            if (range === 'day' || range === 'week') partsInDay = 48; // car load curve est en 30min
+            if (config.api === 'consumption_load_curve') {
+                // Courbe de charge : valeur moyenne en Watts sur l'intervalle.
+                // Énergie (Wh) = Puissance (W) * temps (h)
+                kwh = (rawValue * intervalFractionH) / 1000;
+            } else {
+                // daily_consumption : valeur directement en Wh.
+                kwh = rawValue / 1000;
+            }
 
-            const aboCost = (logement.subscriptionMonth / 30) / partsInDay;
+            const aboCost = aboCostPerPoint;
 
             let hcKwh = 0, hpKwh = 0, baseKwh = 0;
             let hcCost = 0, hpCost = 0, baseCost = 0;
@@ -327,6 +355,21 @@ const initDashboard = async (range, offset) => {
 
 const renderChart = (logement, labels, datasets, range) => {
     const ctx = document.getElementById(logement.chartId).getContext('2d');
+
+    // Ajustement de la largeur pour le scroll horizontal
+    // Plus il y a de barres (ex: Mois = 30-31), plus le conteneur doit être large
+    const wrapperId = logement.chartId.replace('consoChart', 'chart-wrapper-');
+    const wrapper = document.getElementById(wrapperId);
+    if (wrapper) {
+        let pixelsPerBar = 30; // Largeur de base par bâton (incluant l'espace)
+        if (range === 'month') pixelsPerBar = 35; // Plus large pour le mois (textes des jours)
+        if (range === 'day') pixelsPerBar = 20; // Plus fin pour la journée (48 batons de 30min)
+        if (range === 'week') pixelsPerBar = 70; // Très large pour la semaine
+        if (range === 'year') pixelsPerBar = 60; // Très large pour l'année
+
+        const minWidth = labels.length * pixelsPerBar;
+        wrapper.style.minWidth = `max(100%, ${minWidth}px)`;
+    }
 
     const formattedLabels = labels.map(dateStr => {
         // Parsing manuel pour éviter tout décalage UTC vs heure locale
