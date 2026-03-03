@@ -380,7 +380,8 @@ const renderChart = (logement, labels, datasets, range) => {
                     bodyFont: { family: 'Inter', size: window.innerWidth < 600 ? 12 : 14 },
                     padding: window.innerWidth < 600 ? 8 : 12,
                     boxWidth: 8,
-                    position: 'nearest',
+                    yAlign: 'bottom',
+                    position: 'average',
                     callbacks: {
                         label: function (context) {
                             const isMobile = window.innerWidth < 600;
