@@ -406,33 +406,41 @@ const renderChart = (logement, labels, datasets, range) => {
             plugins: {
                 legend: { labels: { color: '#f8fafc', font: { family: 'Inter', size: 13 } } },
                 tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    titleFont: { family: 'Inter', size: 14 },
-                    bodyFont: { family: 'Inter', size: 14 },
-                    padding: 12,
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleFont: { family: 'Inter', size: window.innerWidth < 600 ? 12 : 14 },
+                    bodyFont: { family: 'Inter', size: window.innerWidth < 600 ? 12 : 14 },
+                    padding: window.innerWidth < 600 ? 8 : 12,
+                    boxWidth: 8,
+                    position: 'nearest',
                     callbacks: {
                         label: function (context) {
+                            const isMobile = window.innerWidth < 600;
                             const cost = context.raw;
                             const kwh = context.dataset.kwhData[context.dataIndex];
+
                             if (context.dataset.label === "Abonnement") {
-                                return `Abonnement : ${cost.toFixed(2)} €`;
+                                return isMobile ? `Abo: ${cost.toFixed(2)}€` : `Abonnement : ${cost.toFixed(2)} €`;
                             }
 
-                            let text = `${context.dataset.label} : ${cost.toFixed(2)} € (${kwh.toFixed(2)} kWh)`;
+                            let labelText = context.dataset.label;
+                            if (isMobile) {
+                                labelText = labelText.replace("Heures ", "H.");
+                                labelText = labelText.replace("Conso ", "");
+                            }
+
+                            let text = `${labelText}: ${cost.toFixed(2)}€ (${kwh.toFixed(1)}kWh)`;
 
                             // Calcul du pourcentage pour HC ou HP
                             if (context.dataset.label === "Heures Creuses" || context.dataset.label === "Heures Pleines") {
                                 const allDatasets = context.chart.data.datasets;
                                 let pointTotalKwh = 0;
                                 allDatasets.forEach(ds => {
-                                    if (ds.kwhData) {
-                                        pointTotalKwh += ds.kwhData[context.dataIndex];
-                                    }
+                                    if (ds.kwhData) pointTotalKwh += ds.kwhData[context.dataIndex];
                                 });
 
                                 if (pointTotalKwh > 0) {
-                                    const pct = (kwh / pointTotalKwh * 100).toFixed(1);
-                                    text += ` -> ${pct}%`;
+                                    const pct = (kwh / pointTotalKwh * 100).toFixed(0);
+                                    text += ` (${pct}%)`;
                                 }
                             }
                             return text;
@@ -448,7 +456,7 @@ const renderChart = (logement, labels, datasets, range) => {
                                 if (ds.kwhData && ds.kwhData[dataIndex]) totalKwh += ds.kwhData[dataIndex];
                             });
 
-                            return `\nTotal cumulé : ${totalCost.toFixed(2)} € (${totalKwh.toFixed(2)} kWh)`;
+                            return `Total: ${totalCost.toFixed(2)}€ (${totalKwh.toFixed(1)}kWh)`;
                         }
                     }
                 }
