@@ -381,6 +381,7 @@ const renderChart = (logement, labels, datasets, range) => {
                     padding: window.innerWidth < 600 ? 8 : 12,
                     boxWidth: 8,
                     yAlign: 'bottom',
+                    caretPadding: 10,
                     position: 'average',
                     callbacks: {
                         label: function (context) {
