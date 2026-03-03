@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ÉcoSuivi - Dashboard Consommation</title>
+    <meta name="description" content="Dashboard de suivi de consommation d'électricité pour plusieurs logements.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>ÉcoSuivi</h1>
+            <p>Mon tableau de bord énergétique</p>
+            <button id="clear-cache-btn" onclick="sessionStorage.clear(); location.reload();"
+                title="Vider le cache local et recharger les données depuis l'API">🔄 Vider le cache</button>
+        </header>
+
+        <main class="dashboard">
+            <div class="cards-container">
+                <div class="glass-card property-card" id="card-1">
+                    <h2>Balguerie</h2>
+                    <p class="prm-text">PRM: 16185528047969<br><small>Abo: 15.65€/m | HC/HP</small></p>
+                    <div class="kpi">
+                        <span class="kpi-value" id="kpi-1">--</span>
+                        <span class="kpi-unit">kWh</span>
+                    </div>
+                    <div class="kpi cost-kpi">
+                        <span class="kpi-value cost-value" id="cost-1">--</span>
+                        <span class="kpi-unit">€</span>
+                    </div>
+                </div>
+
+                <div class="glass-card property-card" id="card-2">
+                    <h2>La bicoque</h2>
+                    <p class="prm-text">PRM: 17566859598256<br><small>Abo: 19.56€/m | Base</small></p>
+                    <div class="kpi">
+                        <span class="kpi-value" id="kpi-2">--</span>
+                        <span class="kpi-unit">kWh</span>
+                    </div>
+                    <div class="kpi cost-kpi">
+                        <span class="kpi-value cost-value" id="cost-2">--</span>
+                        <span class="kpi-unit">€</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="time-filters-container">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
+                    <button id="prev-btn" class="nav-btn">&lt;</button>
+                    <div class="time-filters">
+                        <button class="filter-btn" data-range="day">Jour</button>
+                        <button class="filter-btn" data-range="week">Semaine</button>
+                        <button class="filter-btn active" data-range="month">Mois</button>
+                        <button class="filter-btn" data-range="year">Année</button>
+                    </div>
+                    <button id="next-btn" class="nav-btn">&gt;</button>
+                </div>
+                <div id="current-date-display">--</div>
+            </div>
+
+            <!-- Error div for API issues like CORS -->
+            <div id="error-message"
+                style="display: none; color: #facc15; margin-bottom: 1rem; padding: 1rem; background: rgba(234, 179, 8, 0.1); border-radius: 8px;">
+            </div>
+            <div id="loading" class="spinner-container" style="position: relative; height: 50px;">
+                <div class="spinner" style="position: absolute; left: 50%; transform: translateX(-50%);">Chargement...
+                </div>
+            </div>
+
+            <div class="glass-card chart-container" id="chart-card-1" style="display: none; margin-bottom: 2rem;">
+                <div class="chart-header">
+                    <div>
+                        <h2 id="chart-title-1">Balguerie - Consommation</h2>
+                        <div id="hc-hp-details"
+                            style="font-size: 0.9rem; color: #6ee7b7; margin-top: 0.5rem; white-space: pre-wrap;"></div>
+                    </div>
+                </div>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="consoChart1"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card chart-container" id="chart-card-2" style="display: none;">
+                <div class="chart-header">
+                    <h2 id="chart-title-2">La bicoque - Consommation</h2>
+                </div>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="consoChart2"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card warning-card">
+                <h3>⚠️ Rappel de l'API Linky</h3>
+                <p>Vos données sont récupérées via l'API <strong>conso.boris.sh</strong> avec votre token personnel
+                    sécurisé. Les appels sont effectués de manière responsable. Pour un usage intensif, ces requêtes
+                    devraient être mises en cache.</p>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
