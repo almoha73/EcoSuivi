@@ -424,7 +424,8 @@ const renderChart = (logement, labels, datasets, range) => {
 
                             let labelText = context.dataset.label;
                             if (isMobile) {
-                                labelText = labelText.replace("Heures ", "H.");
+                                labelText = labelText.replace("Heures Creuses", "HC");
+                                labelText = labelText.replace("Heures Pleines", "HP");
                                 labelText = labelText.replace("Conso ", "");
                             }
 
