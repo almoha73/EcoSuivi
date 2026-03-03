@@ -26,6 +26,26 @@ let chartInstances = {};
 let currentRange = 'month';
 let currentOffset = 0; // 0 = current, 1 = previous etc.
 
+// Positionneur de tooltip intelligent pour Chart.js : gère le décalage si la barre est trop haute
+if (typeof Chart !== 'undefined') {
+    Chart.Tooltip.positioners.smartTop = function (items) {
+        if (!items.length) return false;
+        let x = items[0].element.x;
+        let y = items[0].element.y;
+        // On cherche le point le plus haut de la pile (Y le plus petit) pour les barres empilées
+        items.forEach(item => {
+            if (item.element.y < y) y = item.element.y;
+        });
+
+        // Si on est trop près du bord haut du canvas, on décale le point vers le bas
+        // pour que le tooltip (en yAlign bottom) rentre dans la barre
+        if (y < 60) {
+            return { x, y: y + 80 }; // On le descend de 80px (il "rentre" dans la barre)
+        }
+        return { x, y: y - 5 }; // On le met juste au dessus
+    };
+}
+
 // Formatage de date locale sans passer par UTC (évite le décalage CET/UTC)
 const fmtDate = (d) => {
     const y = d.getFullYear();
@@ -381,8 +401,7 @@ const renderChart = (logement, labels, datasets, range) => {
                     padding: window.innerWidth < 600 ? 8 : 12,
                     boxWidth: 8,
                     yAlign: 'bottom',
-                    caretPadding: 10,
-                    position: 'average',
+                    position: 'smartTop',
                     callbacks: {
                         label: function (context) {
                             const isMobile = window.innerWidth < 600;
