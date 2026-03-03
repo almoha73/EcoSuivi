@@ -250,22 +250,21 @@ body {
 }
 
 /* Barre de défilement horizontal des graphiques */
-.chart-container>div::-webkit-scrollbar {
+.scroll-container::-webkit-scrollbar {
     height: 10px;
 }
 
-.chart-container>div::-webkit-scrollbar-track {
+.scroll-container::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 6px;
-    margin-top: 5px;
 }
 
-.chart-container>div::-webkit-scrollbar-thumb {
+.scroll-container::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
     border-radius: 6px;
 }
 
-.chart-container>div::-webkit-scrollbar-thumb:hover {
+.scroll-container::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.4);
 }
 

@@ -250,7 +250,27 @@ const initDashboard = async (range, offset) => {
         });
 
         let finalPoints = processedPoints;
-        if (range === 'year' || range === 'week') {
+
+        // Regroupement spécifique pour Balguerie : passage de 15min à 30min si besoin
+        if (logement.id === "16185528047969" && range === 'day' && readings.length > 48) {
+            const groupMap = {};
+            processedPoints.forEach(p => {
+                const parts = p.dateStr.split(':'); // "YYYY-MM-DD HH:MM:SS" -> ["YYYY-MM-DD HH", "MM", "SS"]
+                const hourPart = parts[0];
+                const min = parseInt(parts[1], 10);
+                const roundedMin = min < 30 ? "00" : "30";
+                const groupKey = `${hourPart}:${roundedMin}:00`;
+
+                if (!groupMap[groupKey]) {
+                    groupMap[groupKey] = { dateStr: groupKey, aboCost: 0, hcCost: 0, hpCost: 0, baseCost: 0, hcKwh: 0, hpKwh: 0, baseKwh: 0 };
+                }
+                const pt = groupMap[groupKey];
+                pt.aboCost += p.aboCost; pt.hcCost += p.hcCost; pt.hpCost += p.hpCost; pt.baseCost += p.baseCost;
+                pt.hcKwh += p.hcKwh; pt.hpKwh += p.hpKwh; pt.baseKwh += p.baseKwh;
+            });
+            finalPoints = Object.keys(groupMap).sort().map(k => groupMap[k]);
+        }
+        else if (range === 'year' || range === 'week') {
             const groupMap = {};
             processedPoints.forEach(p => {
                 const isYear = range === 'year';
@@ -375,7 +395,7 @@ const renderChart = (logement, labels, datasets, range) => {
                     beginAtZero: true,
                     suggestedMax: suggestedMax,
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } },
+                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } },
                     title: { display: true, text: '€', color: '#94a3b8', font: { size: 10 } }
                 }
             }
