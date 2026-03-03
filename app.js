@@ -110,9 +110,14 @@ const RANGES = {
 };
 
 const isHeureCreuse = (dateStr) => {
-    const d = new Date(dateStr);
-    const hour = d.getHours();
-    return hour >= 22 || hour < 6;
+    // Si la chaîne contient un espace, c'est un format "YYYY-MM-DD HH:MM:SS" (courbe de charge)
+    if (dateStr.includes(" ")) {
+        const timePart = dateStr.split(" ")[1];
+        const hour = parseInt(timePart.split(":")[0], 10);
+        return hour >= 22 || hour < 6;
+    }
+    // Sinon c'est un format date seule, pas possible de déterminer HC/HP précisément par point
+    return false;
 };
 
 const fetchData = async (prm, rangeType, offset) => {
@@ -120,13 +125,10 @@ const fetchData = async (prm, rangeType, offset) => {
     const { start, end } = config.getDates(offset);
     const url = `/api/${config.api}?prm=${prm}&start=${start}&end=${end}`;
 
-    // Système de mise en cache via sessionStorage (mémoire du navigateur)
-    // Permet de ne pas harceler l'API Enedis si on navigue ou qu'on rafraîchit la page
     const cacheKey = `enedis_cache_${prm}_${config.api}_${start}_${end}`;
     const cachedData = sessionStorage.getItem(cacheKey);
 
     if (cachedData) {
-        console.log(`Données récupérées depuis le cache local pour ${prm} (${start})`);
         return { prm, data: JSON.parse(cachedData), error: null };
     }
 
@@ -135,7 +137,6 @@ const fetchData = async (prm, rangeType, offset) => {
         if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
         const data = await response.json();
 
-        // Sauvegarde dans le cache si c'est un succès (et pas une erreur de l'API encapsulée dans le JSON 200)
         if (!data.error) {
             sessionStorage.setItem(cacheKey, JSON.stringify(data));
         }
@@ -176,100 +177,74 @@ const initDashboard = async (range, offset) => {
         const logement = PRMS[index];
         const kpiElem = document.getElementById(logement.kpiElem);
         const costElem = document.getElementById(logement.costElem);
-
         const msgElem = document.getElementById(`msg-${index + 1}`);
 
         if (result.error || !result.data || !result.data.interval_reading || result.data.interval_reading.length === 0) {
             kpiElem.innerText = "-";
             costElem.innerText = "-";
             if (msgElem) msgElem.innerText = "Données indisponibles (logement non acquis à cette période ?)";
-
             if (result.error && !result.error.includes("400")) allErrors.push(`${logement.label}: ${result.error}`);
             if (result.data && result.data.error) allErrors.push(`${logement.label}: ${result.data.error.error_description || result.data.error}`);
             return;
         }
 
         if (msgElem) msgElem.innerText = "";
-
         document.getElementById(`chart-card-${index + 1}`).style.display = 'block';
         let readings = result.data.interval_reading;
 
-        // Calculs exacts par point:
-        const dailyAboCost = logement.subscriptionMonth / 30; // Coût exact pour 1 journée (24h)
-        let aboCostPerPoint = dailyAboCost; // Par défaut (pour 'daily_consumption' où 1 point = 1 jour)
-
-        let intervalFractionH = 1; // fraction d'heure par défaut
+        const dailyAboCost = logement.subscriptionMonth / 30;
+        let aboCostPerPoint = dailyAboCost;
+        let intervalFractionH = 1;
 
         if (config.api === 'consumption_load_curve' && readings.length > 0) {
-            // Lecture de la durée réelle d'un point dans l'API Enedis (15m ou 30m)
-            const interval = readings[0].interval_length; // ex: "PT15M"
-            let pointsPerDay = 48; // par défaut 30m
+            const interval = readings[0].interval_length;
+            let pointsPerDay = 48;
             if (interval === "PT15M") { pointsPerDay = 96; intervalFractionH = 0.25; }
             else if (interval === "PT30M") { pointsPerDay = 48; intervalFractionH = 0.5; }
             else if (interval === "PT60M") { pointsPerDay = 24; intervalFractionH = 1; }
-
-            aboCostPerPoint = dailyAboCost / pointsPerDay; // On divise la journée en X points
+            aboCostPerPoint = dailyAboCost / pointsPerDay;
         }
 
         const processedPoints = readings.map(r => {
             const dateStr = r.date;
             const rawValue = parseInt(r.value, 10) || 0;
-            let kwh = 0;
-
-            if (config.api === 'consumption_load_curve') {
-                // Courbe de charge : valeur moyenne en Watts sur l'intervalle.
-                // Énergie (Wh) = Puissance (W) * temps (h)
-                kwh = (rawValue * intervalFractionH) / 1000;
-            } else {
-                // daily_consumption : valeur directement en Wh.
-                kwh = rawValue / 1000;
-            }
-
-            const aboCost = aboCostPerPoint;
+            let kwh = (config.api === 'consumption_load_curve') ? (rawValue * intervalFractionH) / 1000 : rawValue / 1000;
 
             let hcKwh = 0, hpKwh = 0, baseKwh = 0;
             let hcCost = 0, hpCost = 0, baseCost = 0;
 
             if (logement.isHCHP) {
+                // Pour 'day' ou 'week' (load curve), on a les heures précises
                 if (range === 'day' || range === 'week') {
-                    if (isHeureCreuse(dateStr)) {
-                        hcKwh = kwh; hcCost = kwh * logement.rateHC;
-                    } else {
-                        hpKwh = kwh; hpCost = kwh * logement.rateHP;
-                    }
+                    if (isHeureCreuse(dateStr)) { hcKwh = kwh; hcCost = kwh * logement.rateHC; }
+                    else { hpKwh = kwh; hpCost = kwh * logement.rateHP; }
                 } else {
+                    // Pour 'month' ou 'year', on estime 33% HC / 67% HP par défaut (approximatif)
                     hcKwh = kwh * 0.33; hcCost = hcKwh * logement.rateHC;
                     hpKwh = kwh * 0.67; hpCost = hpKwh * logement.rateHP;
                 }
             } else {
                 baseKwh = kwh; baseCost = kwh * logement.rateBase;
             }
-
-            return { dateStr, aboCost, hcCost, hpCost, baseCost, hcKwh, hpKwh, baseKwh };
+            return { dateStr, aboCost: aboCostPerPoint, hcCost, hpCost, baseCost, hcKwh, hpKwh, baseKwh };
         });
 
-        // Groupage si annee ou semaine (car semaine est desormais en points 30min)
         let finalPoints = processedPoints;
         if (range === 'year' || range === 'week') {
             const groupMap = {};
             processedPoints.forEach(p => {
                 const isYear = range === 'year';
-                // Year => group by YYYY-MM. Week => group by YYYY-MM-DD
-                let groupKey = p.dateStr.split(' ')[0]; // par defaut YYYY-MM-DD pour Week
-
+                let groupKey = p.dateStr.split(' ')[0];
                 if (!isYear && p.dateStr.endsWith("00:00:00") && p.dateStr.includes(" ")) {
-                    // Les données à 00:00 correspondent à la toute fin du jour précédent dans la "load curve"
                     const parts = groupKey.split('-');
                     let d = new Date(parts[0], parts[1] - 1, parts[2]);
                     d.setDate(d.getDate() - 1);
-                    groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    groupKey = fmtDate(d);
                 }
-
                 if (isYear) {
                     const d = new Date(p.dateStr);
                     groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 }
-
                 if (!groupMap[groupKey]) {
                     groupMap[groupKey] = { dateStr: groupKey, aboCost: 0, hcCost: 0, hpCost: 0, baseCost: 0, hcKwh: 0, hpKwh: 0, baseKwh: 0 };
                 }
@@ -281,10 +256,7 @@ const initDashboard = async (range, offset) => {
         }
 
         const labels = finalPoints.map(p => p.dateStr);
-
-        let totalValKwh = 0;
-        let totalValCost = 0;
-
+        let totalValKwh = 0, totalValCost = 0;
         finalPoints.forEach(p => {
             totalValKwh += p.hcKwh + p.hpKwh + p.baseKwh;
             totalValCost += p.aboCost + p.hcCost + p.hpCost + p.baseCost;
@@ -295,58 +267,28 @@ const initDashboard = async (range, offset) => {
 
         const detElem = document.getElementById('hc-hp-details');
         if (logement.isHCHP && detElem && index === 0) {
-            let tHcKwh = 0, tHpKwh = 0;
-            let tHcCost = 0, tHpCost = 0;
-            finalPoints.forEach(p => {
-                tHcKwh += p.hcKwh; tHpKwh += p.hpKwh;
-                tHcCost += p.hcCost; tHpCost += p.hpCost;
-            });
+            let tHcKwh = 0, tHpKwh = 0, tHcCost = 0, tHpCost = 0;
+            finalPoints.forEach(p => { tHcKwh += p.hcKwh; tHpKwh += p.hpKwh; tHcCost += p.hcCost; tHpCost += p.hpCost; });
             const totalHCHPKwh = tHcKwh + tHpKwh;
             const pctHc = totalHCHPKwh > 0 ? ((tHcKwh / totalHCHPKwh) * 100).toFixed(1) : 0;
             const pctHp = totalHCHPKwh > 0 ? (100 - pctHc).toFixed(1) : 0;
-
             detElem.innerHTML = `HC : ${tHcKwh.toFixed(1)} kWh (${tHcCost.toFixed(2)}€) - <strong>${pctHc}%</strong>  |  HP : ${tHpKwh.toFixed(1)} kWh (${tHpCost.toFixed(2)}€) - <strong>${pctHp}%</strong>`;
-        } else if (detElem && index === 0) {
-            detElem.innerHTML = "";
-        }
+        } else if (detElem && index === 0) { detElem.innerHTML = ""; }
 
-        const datasets = [];
-
-        // Push Abonnement first (bottom of stack)
-        datasets.push({
-            label: "Abonnement",
-            data: finalPoints.map(p => p.aboCost),
-            backgroundColor: logement.colorAbo,
-            kwhData: finalPoints.map(p => 0)
-        });
-
+        const datasets = [
+            { label: "Abonnement", data: finalPoints.map(p => p.aboCost), backgroundColor: logement.colorAbo, kwhData: finalPoints.map(p => 0) }
+        ];
         if (logement.isHCHP) {
-            datasets.push({
-                label: "Heures Creuses",
-                data: finalPoints.map(p => p.hcCost),
-                backgroundColor: logement.colorHC || '#34d399',
-                kwhData: finalPoints.map(p => p.hcKwh)
-            });
-            datasets.push({
-                label: "Heures Pleines",
-                data: finalPoints.map(p => p.hpCost),
-                backgroundColor: logement.colorHP || '#f87171',
-                kwhData: finalPoints.map(p => p.hpKwh)
-            });
+            datasets.push({ label: "Heures Creuses", data: finalPoints.map(p => p.hcCost), backgroundColor: logement.colorHC, kwhData: finalPoints.map(p => p.hcKwh) });
+            datasets.push({ label: "Heures Pleines", data: finalPoints.map(p => p.hpCost), backgroundColor: logement.colorHP, kwhData: finalPoints.map(p => p.hpKwh) });
         } else {
-            datasets.push({
-                label: "Conso Base",
-                data: finalPoints.map(p => p.baseCost),
-                backgroundColor: logement.colorBase,
-                kwhData: finalPoints.map(p => p.baseKwh)
-            });
+            datasets.push({ label: "Conso Base", data: finalPoints.map(p => p.baseCost), backgroundColor: logement.colorBase, kwhData: finalPoints.map(p => p.baseKwh) });
         }
 
         renderChart(logement, labels, datasets, range);
     });
 
     document.getElementById('loading').style.display = 'none';
-
     if (allErrors.length > 0) {
         errorContainer.style.display = 'block';
         errorContainer.innerHTML = '<strong>Avertissement ou absence de données :</strong><br>' + allErrors.join('<br>');
@@ -355,35 +297,30 @@ const initDashboard = async (range, offset) => {
 
 const renderChart = (logement, labels, datasets, range) => {
     const ctx = document.getElementById(logement.chartId).getContext('2d');
-
-    // Ajustement de la largeur pour le scroll horizontal
-    // Plus il y a de barres (ex: Mois = 30-31), plus le conteneur doit être large
     const wrapperId = logement.chartId.replace('consoChart', 'chart-wrapper-');
     const wrapper = document.getElementById(wrapperId);
-    if (wrapper) {
-        let pixelsPerBar = 30; // Largeur de base par bâton (incluant l'espace)
-        if (range === 'month') pixelsPerBar = 35; // Plus large pour le mois (textes des jours)
-        if (range === 'day') pixelsPerBar = 20; // Plus fin pour la journée (48 batons de 30min)
-        if (range === 'week') pixelsPerBar = 70; // Très large pour la semaine
-        if (range === 'year') pixelsPerBar = 60; // Très large pour l'année
 
+    if (wrapper) {
+        let pixelsPerBar = 30;
+        if (range === 'month') pixelsPerBar = 35;
+        if (range === 'day') pixelsPerBar = 22; // Légèrement plus pour la lisibilité
+        if (range === 'week') pixelsPerBar = 75;
+        if (range === 'year') pixelsPerBar = 65;
         const minWidth = labels.length * pixelsPerBar;
         wrapper.style.minWidth = `max(100%, ${minWidth}px)`;
     }
 
     const formattedLabels = labels.map(dateStr => {
-        // Parsing manuel pour éviter tout décalage UTC vs heure locale
         let d;
-        if (dateStr.length === 7) { // YYYY-MM
+        if (dateStr.length === 7) {
             const [y, m] = dateStr.split('-').map(Number);
             d = new Date(y, m - 1, 15);
-        } else if (dateStr.length === 10) { // YYYY-MM-DD
+        } else if (dateStr.length === 10) {
             const [y, m, day] = dateStr.split('-').map(Number);
             d = new Date(y, m - 1, day);
-        } else { // YYYY-MM-DD HH:MM:SS (load curve)
+        } else {
             d = new Date(dateStr);
         }
-
         if (range === 'day') return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         if (range === 'year') return d.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
         return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
@@ -394,18 +331,49 @@ const renderChart = (logement, labels, datasets, range) => {
         if (chartInstances[logement.id].yAxis) chartInstances[logement.id].yAxis.destroy();
     }
 
-    chartInstances[logement.id] = new Chart(ctx, {
-        type: 'bar', // Always bar to support stacking properly for amounts
-        data: {
-            labels: formattedLabels,
-            datasets: datasets
-        },
+    const yAxisContainerId = logement.chartId.replace('consoChart', 'yAxis');
+    const yAxisCtx = document.getElementById(yAxisContainerId).getContext('2d');
+
+    let maxVal = 0;
+    labels.forEach((_, i) => {
+        let sum = 0;
+        datasets.forEach(ds => sum += ds.data[i] || 0);
+        if (sum > maxVal) maxVal = sum;
+    });
+    const suggestedMax = Math.max(0.1, maxVal * 1.1);
+
+    const yAxisChart = new Chart(yAxisCtx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [] },
+        options: {
+            maintainAspectRatio: false,
+            layout: { padding: { top: 32, bottom: 20 } },
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: { display: false },
+                y: {
+                    beginAtZero: true,
+                    suggestedMax: suggestedMax,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } },
+                    title: { display: true, text: '€', color: '#94a3b8', font: { size: 10 } }
+                }
+            }
+        }
+    });
+
+    const mainChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: formattedLabels, datasets: datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: '#f8fafc', font: { family: 'Inter', size: 13 } } },
+                legend: {
+                    display: range !== 'day', // Masquer légende sur jour pour gagner de la place
+                    labels: { color: '#f8fafc', font: { family: 'Inter', size: 11 } }
+                },
                 tooltip: {
                     backgroundColor: 'rgba(15, 23, 42, 0.95)',
                     titleFont: { family: 'Inter', size: window.innerWidth < 600 ? 12 : 14 },
@@ -418,46 +386,28 @@ const renderChart = (logement, labels, datasets, range) => {
                             const isMobile = window.innerWidth < 600;
                             const cost = context.raw;
                             const kwh = context.dataset.kwhData[context.dataIndex];
-
-                            if (context.dataset.label === "Abonnement") {
-                                return isMobile ? `Abo: ${cost.toFixed(2)}€` : `Abonnement : ${cost.toFixed(2)} €`;
-                            }
-
+                            if (context.dataset.label === "Abonnement") return isMobile ? `Abo: ${cost.toFixed(2)}€` : `Abonnement : ${cost.toFixed(2)} €`;
                             let labelText = context.dataset.label;
                             if (isMobile) {
-                                labelText = labelText.replace("Heures Creuses", "HC");
-                                labelText = labelText.replace("Heures Pleines", "HP");
-                                labelText = labelText.replace("Conso ", "");
+                                labelText = labelText.replace("Heures Creuses", "HC").replace("Heures Pleines", "HP").replace("Conso ", "");
                             }
-
                             let text = `${labelText}: ${cost.toFixed(2)}€ (${kwh.toFixed(1)}kWh)`;
-
-                            // Calcul du pourcentage pour HC ou HP
                             if (context.dataset.label === "Heures Creuses" || context.dataset.label === "Heures Pleines") {
                                 const allDatasets = context.chart.data.datasets;
                                 let pointTotalKwh = 0;
-                                allDatasets.forEach(ds => {
-                                    if (ds.kwhData) pointTotalKwh += ds.kwhData[context.dataIndex];
-                                });
-
-                                if (pointTotalKwh > 0) {
-                                    const pct = (kwh / pointTotalKwh * 100).toFixed(0);
-                                    text += ` (${pct}%)`;
-                                }
+                                allDatasets.forEach(ds => { if (ds.kwhData) pointTotalKwh += ds.kwhData[context.dataIndex]; });
+                                if (pointTotalKwh > 0) { const pct = (kwh / pointTotalKwh * 100).toFixed(0); text += ` (${pct}%)`; }
                             }
                             return text;
                         },
                         footer: function (tooltipItems) {
-                            let totalCost = 0;
-                            let totalKwh = 0;
+                            let totalCost = 0, totalKwh = 0;
                             const dataIndex = tooltipItems[0].dataIndex;
                             const chart = tooltipItems[0].chart;
-
                             chart.data.datasets.forEach(ds => {
                                 if (ds.data[dataIndex]) totalCost += ds.data[dataIndex];
                                 if (ds.kwhData && ds.kwhData[dataIndex]) totalKwh += ds.kwhData[dataIndex];
                             });
-
                             return `Total: ${totalCost.toFixed(2)}€ (${totalKwh.toFixed(1)}kWh)`;
                         }
                     }
@@ -466,37 +416,31 @@ const renderChart = (logement, labels, datasets, range) => {
             scales: {
                 x: {
                     stacked: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter' }, maxTicksLimit: 12 }
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 }, maxTicksLimit: (range === 'day' ? 12 : 20) }
                 },
                 y: {
                     stacked: true,
+                    beginAtZero: true,
+                    suggestedMax: suggestedMax,
                     grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter' } },
-                    title: { display: true, text: 'Coût (€)', color: '#94a3b8' }
+                    ticks: { display: false }
                 }
             }
         }
     });
+
+    chartInstances[logement.id] = { main: mainChart, yAxis: yAxisChart };
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const range = e.target.dataset.range;
-            if (range !== currentRange) {
-                initDashboard(range, 0); // Reset offset when changing range
-            }
+            if (range !== currentRange) initDashboard(range, 0);
         });
     });
-
-    document.getElementById('prev-btn').addEventListener('click', () => {
-        initDashboard(currentRange, currentOffset + 1);
-    });
-
-    document.getElementById('next-btn').addEventListener('click', () => {
-        if (currentOffset > 0) initDashboard(currentRange, currentOffset - 1);
-    });
-
+    document.getElementById('prev-btn').addEventListener('click', () => { initDashboard(currentRange, currentOffset + 1); });
+    document.getElementById('next-btn').addEventListener('click', () => { if (currentOffset > 0) initDashboard(currentRange, currentOffset - 1); });
     initDashboard('month', 0);
 });
