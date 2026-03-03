@@ -17,7 +17,8 @@ module.exports = (req, res) => {
     const options = {
         method: req.method,
         headers: {
-            ...req.headers
+            ...req.headers,
+            'Authorization': 'Bearer ' + process.env.ENEDIS_TOKEN
         }
     };
 

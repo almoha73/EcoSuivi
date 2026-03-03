@@ -1,4 +1,4 @@
-const TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NzI1MzcwODcsImV4cCI6MTg2NzA1ODY4Nywic3ViIjpbIjE2MTg1NTI4MDQ3OTY5IiwiMTc1NjY4NTk1OTgyNTYiXX0.W_3mv9h5hlDs5CsU5fs7ACDoO-RWICQLy9WVKX5ojbI";
+// Token supprimé pour sécurité (géré côté serveur via variable d'environnement ENEDIS_TOKEN)
 
 const LOGEMENT_1 = {
     id: "16185528047969", label: "Balguerie", colorBase: "#38bdf8", kpiElem: "kpi-1", costElem: "cost-1", chartId: "consoChart1",
@@ -131,7 +131,7 @@ const fetchData = async (prm, rangeType, offset) => {
     }
 
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
         const data = await response.json();
 

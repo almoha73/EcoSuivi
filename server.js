@@ -5,6 +5,15 @@ const path = require('path');
 
 const PORT = 3000;
 
+// Charger .env manuellement pour éviter d'installer dotenv
+if (fs.existsSync('.env')) {
+    const env = fs.readFileSync('.env', 'utf8');
+    env.split('\n').forEach(line => {
+        const [key, value] = line.split('=');
+        if (key && value) process.env[key.trim()] = value.trim();
+    });
+}
+
 http.createServer((req, res) => {
     // Basic CORS setup for the local server
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,7 +32,10 @@ http.createServer((req, res) => {
 
         const options = {
             method: req.method,
-            headers: { ...req.headers }
+            headers: {
+                ...req.headers,
+                'Authorization': 'Bearer ' + process.env.ENEDIS_TOKEN
+            }
         };
         // Remove host to avoid SSL/DNS conflicts on the target API
         delete options.headers.host;
