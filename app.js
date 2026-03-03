@@ -390,7 +390,8 @@ const renderChart = (logement, labels, datasets, range) => {
     });
 
     if (chartInstances[logement.id]) {
-        chartInstances[logement.id].destroy();
+        if (chartInstances[logement.id].main) chartInstances[logement.id].main.destroy();
+        if (chartInstances[logement.id].yAxis) chartInstances[logement.id].yAxis.destroy();
     }
 
     chartInstances[logement.id] = new Chart(ctx, {
