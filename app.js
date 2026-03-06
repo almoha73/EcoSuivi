@@ -109,7 +109,7 @@ const RANGES = {
         }
     },
     year: {
-        api: 'consumption_load_curve', days: 365,
+        api: 'daily_consumption', days: 365,
         getDates: (offset) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
