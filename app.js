@@ -93,7 +93,7 @@ const RANGES = {
         }
     },
     month: {
-        api: 'daily_consumption', days: 30,
+        api: 'consumption_load_curve', days: 30,
         getDates: (offset) => {
             const today = new Date();
             const start = new Date(today.getFullYear(), today.getMonth() - offset, 1);
@@ -140,12 +140,9 @@ const isHeureCreuse = (dateStr) => {
     return false;
 };
 
-const fetchData = async (prm, rangeType, offset) => {
-    const config = RANGES[rangeType];
-    const { start, end } = config.getDates(offset);
-    const url = `/api/${config.api}?prm=${prm}&start=${start}&end=${end}`;
-
-    const cacheKey = `enedis_cache_${prm}_${config.api}_${start}_${end}`;
+const fetchSingleChunk = async (prm, apiName, start, end) => {
+    const url = `/api/${apiName}?prm=${prm}&start=${start}&end=${end}`;
+    const cacheKey = `enedis_cache_${prm}_${apiName}_${start}_${end}`;
     const cachedData = sessionStorage.getItem(cacheKey);
 
     if (cachedData) {
@@ -163,9 +160,60 @@ const fetchData = async (prm, rangeType, offset) => {
 
         return { prm, data, error: null };
     } catch (error) {
-        console.error(`Erreur pour le PRM ${prm}:`, error);
         return { prm, data: null, error: error.message };
     }
+};
+
+const fetchData = async (prm, rangeType, offset) => {
+    const config = RANGES[rangeType];
+    const { start, end } = config.getDates(offset);
+
+    const ds = (new Date(end) - new Date(start)) / (1000 * 3600 * 24);
+    if (config.api !== 'consumption_load_curve' || ds <= 7) {
+        return fetchSingleChunk(prm, config.api, start, end);
+    }
+
+    const promises = [];
+    let currentStart = new Date(start);
+    const finalEnd = new Date(end);
+
+    while (currentStart < finalEnd) {
+        let currentEnd = new Date(currentStart);
+        currentEnd.setDate(currentEnd.getDate() + 7);
+        if (currentEnd > finalEnd) currentEnd = finalEnd;
+
+        promises.push(fetchSingleChunk(prm, config.api, fmtDate(currentStart), fmtDate(currentEnd)));
+        currentStart = currentEnd;
+    }
+
+    const results = await Promise.all(promises);
+    let allReadings = [];
+    let firstValidResult = null;
+    let anyError = null;
+
+    for (const res of results) {
+        if (res.error || (res.data && res.data.error)) {
+            anyError = anyError || res.error || (res.data && res.data.error.error_description) || "Erreur récupération chunk";
+        } else if (res.data && res.data.interval_reading) {
+            if (!firstValidResult) firstValidResult = res;
+            allReadings = allReadings.concat(res.data.interval_reading);
+        }
+    }
+
+    if (allReadings.length === 0) {
+        return { prm, data: null, error: anyError || "Aucune donnée disponible" };
+    }
+
+    return {
+        prm,
+        data: {
+            ...firstValidResult.data,
+            start: start,
+            end: end,
+            interval_reading: allReadings
+        },
+        error: anyError ? `${anyError} (Données partielles)` : null
+    };
 };
 
 const initDashboard = async (range, offset) => {
@@ -234,12 +282,12 @@ const initDashboard = async (range, offset) => {
             let hcCost = 0, hpCost = 0, baseCost = 0;
 
             if (logement.isHCHP) {
-                // Pour 'day' ou 'week' (load curve), on a les heures précises
-                if (range === 'day' || range === 'week') {
+                // Si on a la courbe de charge, on a les heures précises
+                if (config.api === 'consumption_load_curve') {
                     if (isHeureCreuse(dateStr)) { hcKwh = kwh; hcCost = kwh * logement.rateHC; }
                     else { hpKwh = kwh; hpCost = kwh * logement.rateHP; }
                 } else {
-                    // Pour 'month' ou 'year', on estime 33% HC / 67% HP par défaut (approximatif)
+                    // Sinon (daily_consumption), on estime 33% HC / 67% HP par défaut (approximatif)
                     hcKwh = kwh * 0.33; hcCost = hcKwh * logement.rateHC;
                     hpKwh = kwh * 0.67; hpCost = hpKwh * logement.rateHP;
                 }
@@ -270,7 +318,7 @@ const initDashboard = async (range, offset) => {
             });
             finalPoints = Object.keys(groupMap).sort().map(k => groupMap[k]);
         }
-        else if (range === 'year' || range === 'week') {
+        else if (range === 'year' || range === 'week' || range === 'month') {
             const groupMap = {};
             processedPoints.forEach(p => {
                 const isYear = range === 'year';
