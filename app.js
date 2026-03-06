@@ -109,7 +109,7 @@ const RANGES = {
         }
     },
     year: {
-        api: 'daily_consumption', days: 365,
+        api: 'consumption_load_curve', days: 365,
         getDates: (offset) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -173,7 +173,7 @@ const fetchData = async (prm, rangeType, offset) => {
         return fetchSingleChunk(prm, config.api, start, end);
     }
 
-    const promises = [];
+    const chunkTasks = [];
     let currentStart = new Date(start);
     const finalEnd = new Date(end);
 
@@ -182,11 +182,18 @@ const fetchData = async (prm, rangeType, offset) => {
         currentEnd.setDate(currentEnd.getDate() + 7);
         if (currentEnd > finalEnd) currentEnd = finalEnd;
 
-        promises.push(fetchSingleChunk(prm, config.api, fmtDate(currentStart), fmtDate(currentEnd)));
+        const s = fmtDate(currentStart);
+        const e = fmtDate(currentEnd);
+        chunkTasks.push(() => fetchSingleChunk(prm, config.api, s, e));
         currentStart = currentEnd;
     }
 
-    const results = await Promise.all(promises);
+    const results = [];
+    for (let i = 0; i < chunkTasks.length; i += 5) {
+        const batch = chunkTasks.slice(i, i + 5).map(task => task());
+        const batchResults = await Promise.all(batch);
+        results.push(...batchResults);
+    }
     let allReadings = [];
     let firstValidResult = null;
     let anyError = null;
