@@ -6,6 +6,6 @@
     "scripts": {
         "start": "node server.js",
         "dev": "node server.js",
-        "build": "echo 'No build required'"
+        "build": "mkdir -p dist && cp index.html style.css app.js dist/"
     }
 }

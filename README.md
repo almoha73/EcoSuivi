@@ -34,18 +34,20 @@
 
 4. Ouvrez votre navigateur sur `http://localhost:3000`.
 
-## 🌐 Déploiement (Cloudflare Pages / Vercel)
+## 🌐 Déploiement (Cloudflare Workers / Pages / Vercel)
 
-Ce projet est prêt pour le déploiement sur **Cloudflare Pages** et **Vercel** :
+Ce projet est prêt pour le déploiement sur plusieurs plateformes :
+
+### Cloudflare Workers
+1. Liez votre dépôt GitHub dans **Cloudflare Workers**.
+2. Les réglages automatiques (`wrangler.jsonc`) compilent le dossier `dist/` et exécutent `worker.js`.
+3. Dans **Settings > Variables and Secrets**, ajoutez `ENEDIS_TOKEN` avec votre token.
 
 ### Cloudflare Pages
 1. Liez votre dépôt GitHub dans **Cloudflare Pages**.
-2. Dans les paramètres de build :
-   - **Framework preset** : *None*
-   - **Build command** : Laisser vide ou `npm run build`
-   - **Build output directory** : `/` (racine)
-3. Dans **Settings > Environment variables**, ajoutez la variable `ENEDIS_TOKEN` avec votre token.
-4. Les requêtes `/api/*` sont automatiquement gérées par la fonction Cloudflare Pages (`functions/api/[[path]].js`).
+2. **Build command** : `npm run build` | **Build output directory** : `dist`
+3. Dans **Settings > Environment variables**, ajoutez `ENEDIS_TOKEN`.
+4. Les requêtes `/api/*` sont automatiquement gérées.
 
 ### Vercel
 1. Liez votre dépôt GitHub à **Vercel**.
