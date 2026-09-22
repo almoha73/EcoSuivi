@@ -13,7 +13,10 @@ export async function onRequest(context) {
         });
     }
 
-    const token = env.ENEDIS_TOKEN;
+    let token = (env.ENEDIS_TOKEN || '').trim().replace(/[\r\n\s]+/g, '').replace(/^["']|["']$/g, '');
+    if (token.toLowerCase().startsWith('bearer')) {
+        token = token.slice(6).trim();
+    }
     if (!token) {
         return new Response(JSON.stringify({
             error: "Variable d'environnement ENEDIS_TOKEN non configurée dans Cloudflare (Settings > Environment variables)."
