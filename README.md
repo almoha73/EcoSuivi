@@ -34,13 +34,23 @@
 
 4. Ouvrez votre navigateur sur `http://localhost:3000`.
 
-## 🌐 Déploiement (Vercel / Netlify)
+## 🌐 Déploiement (Cloudflare Pages / Vercel)
 
-Ce projet est configuré pour fonctionner comme une **Serverless Function** (voir `api/proxy.js`).
+Ce projet est prêt pour le déploiement sur **Cloudflare Pages** et **Vercel** :
 
-1. Liez votre dépôt GitHub à **Vercel** ou **Netlify**.
-2. **IMPORTANT** : Ajoutez une variable d'environnement nommée `ENEDIS_TOKEN` dans les réglages de votre projet sur leur interface.
-3. Déployez !
+### Cloudflare Pages
+1. Liez votre dépôt GitHub dans **Cloudflare Pages**.
+2. Dans les paramètres de build :
+   - **Framework preset** : *None*
+   - **Build command** : Laisser vide ou `npm run build`
+   - **Build output directory** : `/` (racine)
+3. Dans **Settings > Environment variables**, ajoutez la variable `ENEDIS_TOKEN` avec votre token.
+4. Les requêtes `/api/*` sont automatiquement gérées par la fonction Cloudflare Pages (`functions/api/[[path]].js`).
+
+### Vercel
+1. Liez votre dépôt GitHub à **Vercel**.
+2. **IMPORTANT** : Ajoutez une variable d'environnement nommée `ENEDIS_TOKEN` dans les réglages du projet.
+3. Déployez ! La configuration dans `vercel.json` et `api/proxy.js` gère le proxy automatiquement.
 
 ## 🔒 Sécurité
 
