@@ -16,18 +16,37 @@ export default {
                 });
             }
 
-            const targetUrl = 'https://conso.boris.sh' + url.pathname + url.search;
-            const token = env.ENEDIS_TOKEN || '';
+            const token = env.ENEDIS_TOKEN;
+            if (!token) {
+                return new Response(JSON.stringify({
+                    error: "Variable d'environnement ENEDIS_TOKEN non configurée dans Cloudflare (Settings > Variables and Secrets)."
+                }), {
+                    status: 401,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                    },
+                });
+            }
 
-            const newHeaders = new Headers(request.headers);
-            newHeaders.set('Authorization', 'Bearer ' + token);
-            newHeaders.delete('host');
-            newHeaders.delete('referer');
+            const targetUrl = 'https://conso.boris.sh' + url.pathname + url.search;
+
+            // Envoi d'en-têtes propres sans relayer les en-têtes internes Cloudflare (comme cf-connecting-ip qui cause l'Erreur 403 / Code 1000)
+            const headers = {
+                'Authorization': 'Bearer ' + token,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            };
+
+            const contentType = request.headers.get('content-type');
+            if (contentType) {
+                headers['Content-Type'] = contentType;
+            }
 
             try {
                 const fetchOptions = {
                     method: request.method,
-                    headers: newHeaders,
+                    headers: headers,
                 };
 
                 if (request.method !== 'GET' && request.method !== 'HEAD') {

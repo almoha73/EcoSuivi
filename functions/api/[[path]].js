@@ -13,21 +13,38 @@ export async function onRequest(context) {
         });
     }
 
+    const token = env.ENEDIS_TOKEN;
+    if (!token) {
+        return new Response(JSON.stringify({
+            error: "Variable d'environnement ENEDIS_TOKEN non configurée dans Cloudflare (Settings > Environment variables)."
+        }), {
+            status: 401,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+            },
+        });
+    }
+
     const url = new URL(request.url);
-    // Forward /api/... path and query parameters to the Boris Enedis proxy
     const targetUrl = 'https://conso.boris.sh' + url.pathname + url.search;
 
-    const token = env.ENEDIS_TOKEN || '';
+    // Clean headers to avoid Cloudflare Error 1000
+    const headers = {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
 
-    const newHeaders = new Headers(request.headers);
-    newHeaders.set('Authorization', 'Bearer ' + token);
-    newHeaders.delete('host');
-    newHeaders.delete('referer');
+    const contentType = request.headers.get('content-type');
+    if (contentType) {
+        headers['Content-Type'] = contentType;
+    }
 
     try {
         const fetchOptions = {
             method: request.method,
-            headers: newHeaders,
+            headers: headers,
         };
 
         if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -35,7 +52,6 @@ export async function onRequest(context) {
         }
 
         const response = await fetch(targetUrl, fetchOptions);
-
         const responseHeaders = new Headers(response.headers);
         responseHeaders.set('Access-Control-Allow-Origin', '*');
 

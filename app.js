@@ -151,7 +151,21 @@ const fetchSingleChunk = async (prm, apiName, start, end) => {
 
     try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+        if (!response.ok) {
+            let errorMsg = `Erreur HTTP: ${response.status}`;
+            try {
+                const errBody = await response.json();
+                if (errBody && (errBody.error || errBody.message)) {
+                    errorMsg += ` (${errBody.error || errBody.message})`;
+                }
+            } catch (_) {
+                try {
+                    const text = await response.text();
+                    if (text && text.length < 120) errorMsg += ` (${text})`;
+                } catch (_) {}
+            }
+            throw new Error(errorMsg);
+        }
         const data = await response.json();
 
         if (!data.error) {
